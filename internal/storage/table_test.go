@@ -206,6 +206,68 @@ func TestReadRows(t *testing.T) {
 	}
 }
 
+func TestInsertUniqueConstraint(t *testing.T) {
+	db := NewDatabase()
+	table, _ := db.CreateTable("users")
+
+	cols := []*Column{
+		{Name: "id", ColumnType: IntType, IsPrimaryKey: true, IsUnique: true},
+		{Name: "email", ColumnType: TextType, IsUnique: true},
+		{Name: "names", ColumnType: TextType, IsPrimaryKey: false, IsUnique: false},
+		{Name: "username", ColumnType: TextType, IsPrimaryKey: false, IsUnique: true},
+	}
+
+	for _, col := range cols {
+		if err := table.AddColumn(col); err != nil {
+			t.Fatalf("an error ccurred when adding to column %s", err)
+		}
+	}
+
+	rows := []*Row{
+		{Data: map[string]any{
+			"id":       1,
+			"email":    "doe@test.com",
+			"names":    "John Doe",
+			"username": "johndoe",
+		},
+		},
+		{Data: map[string]any{
+			"id":       2,
+			"email":    "klaus@test.com",
+			"names":    "Niklaus Nduati",
+			"username": "kalus",
+		},
+		},
+		{Data: map[string]any{
+			"id":       3,
+			"email":    "musk@test.com",
+			"names":    "Elon Musk",
+			"username": "musk",
+		},
+		},
+		{Data: map[string]any{
+			"id":       4,
+			"email":    "wired@test.com",
+			"names":    "Laurie Wired",
+			"username": "lauriewired",
+		},
+		},
+		{Data: map[string]any{
+			"id":       5,
+			"email":    "wired5@test.com",
+			"names":    "Laurie Wired",
+			"username": "lauriewired",
+		},
+		},
+	}
+
+	for _, row := range rows {
+		if err := table.Insert(row); err != nil {
+			t.Fatalf("expected error occurred during insert %s", err)
+		}
+	}
+}
+
 func TestUpdateRow(t *testing.T) {
 	db := NewDatabase()
 	table, _ := db.CreateTable("users")

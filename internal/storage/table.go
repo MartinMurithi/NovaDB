@@ -58,30 +58,53 @@ func (t *Table) Insert(row *Row) error {
 		return fmt.Errorf("row cannot be nil")
 	}
 
-	// Check all columns in table exist in row
-	for _, col := range t.Columns {
-		if _, ok := row.Data[col.Name]; !ok {
-			return fmt.Errorf("missing value for column %s", col.Name)
-		}
-	}
-
-	// Check primary key uniqueness
+	// Find primary key column
+	var pkColumn *Column
 	for _, col := range t.Columns {
 		if col.IsPrimaryKey {
-			val := row.Data[col.Name]
-			if _, exists := t.PrimaryIndex[val]; exists {
-				return fmt.Errorf("duplicate primary key value %v", val)
-			}
-			// Store index for quick lookup
-			t.PrimaryIndex[val] = len(t.Rows)
+			pkColumn = col
 			break
 		}
 	}
 
-	// Add row
+	if pkColumn == nil {
+		return fmt.Errorf("table has no primary key")
+	}
+
+	pkValue, exists := row.Data[pkColumn.Name]
+	if !exists {
+		return fmt.Errorf("primary key %s missing", pkColumn.Name)
+	}
+
+	// Enforce primary key uniqueness
+	if _, exists := t.PrimaryIndex[pkValue]; exists {
+		return fmt.Errorf("duplicate primary key value %v", pkValue)
+	}
+
+	// Enforce UNIQUE constraints (non-primary)
+	for _, col := range t.Columns {
+		if col.IsUnique && !col.IsPrimaryKey {
+			newVal := row.Data[col.Name]
+
+			for _, existingRow := range t.Rows {
+				if existingRow.Data[col.Name] == newVal {
+					return fmt.Errorf(
+						"duplicate value %v for unique column %s",
+						newVal,
+						col.Name,
+					)
+				}
+			}
+		}
+	}
+
+	// Insert row
 	t.Rows = append(t.Rows, row)
+	t.PrimaryIndex[pkValue] = len(t.Rows) - 1
+
 	return nil
 }
+
 
 // GetRows returns all rows in the table
 func (t *Table) GetRows() []*Row {
