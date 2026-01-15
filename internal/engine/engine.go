@@ -12,86 +12,183 @@ type Engine struct {
 	db *storage.Database
 }
 
-// NewEngine creates a new execution engine
 func NewEngine(db *storage.Database) *Engine {
-	return &Engine{
-		db: db,
-	}
+	return &Engine{db: db}
 }
 
-// ExecutePlan dispatches based on plan type
+func (e *Engine) DB() *storage.Database {
+	return e.db
+}
+
+// ExecutePlan executes any plan type (SELECT, INSERT, UPDATE, DELETE)
 func (e *Engine) ExecutePlan(plan *planner.Plan) ([]*storage.Row, error) {
+	// Lookup table
+	t, ok := e.db.Tables[plan.TableName]
+	if !ok {
+		return nil, fmt.Errorf("table '%s' does not exist", plan.TableName)
+	}
+
 	switch plan.Type {
+	// --------------------------
 	case planner.SelectPlan:
-		return e.executeSelect(plan)
+		return e.selectRows(plan, t)
+
 	case planner.InsertPlan:
-		return nil, e.executeInsert(plan)
+		return e.insertRow(plan, t)
+
 	case planner.UpdatePlan:
-		return nil, e.executeUpdate(plan)
+		return e.updateRows(plan, t)
+
 	case planner.DeletePlan:
-		return nil, e.executeDelete(plan)
+		return e.deleteRows(plan, t)
+
 	default:
 		return nil, fmt.Errorf("unsupported plan type %s", plan.Type)
 	}
 }
 
-func (e *Engine) ExecutePlan(plan *planner.Plan) ([]*storage.Row, error) {
-	// 1. Lookup table
-	rows, err := e.SelectAll(plan.TableName)
-	if err != nil {
-		return nil, fmt.Errorf("execution error: %w", err)
-	}
+// --------------------------
+// SELECT helper
+// --------------------------
+func (e *Engine) selectRows(plan *planner.Plan, table *storage.Table) ([]*storage.Row, error) {
+	rows := []*storage.Row{}
 
-	// 2. Validate filter columns exist
-	for _, f := range plan.Filters {
-		if !e.TableHasColumn(plan.TableName, f.Column) {
-			return nil, fmt.Errorf("execution error: filter column '%s' does not exist in table '%s'", f.Column, plan.TableName)
+	for _, row := range table.Rows {
+		if !matchesFilters(row, plan.Filters) {
+			continue
 		}
-	}
 
-	// 3. Apply filters
-	if len(plan.Filters) > 0 {
-		filtered := []*storage.Row{}
-		for _, row := range rows {
-			matches := true
-			for _, f := range plan.Filters {
-				rowVal, ok := row.Data[f.Column]
-				if !ok {
-					return nil, fmt.Errorf("execution error: row missing column '%s'", f.Column)
-				}
-				if rowVal != f.Value {
-					matches = false
-					break
-				}
-			}
-			if matches {
-				filtered = append(filtered, row)
-			}
+		// Project columns
+		if len(plan.Columns) == 1 && plan.Columns[0] == "*" {
+			rows = append(rows, row)
+			continue
 		}
-		rows = filtered
-	}
 
-	// 4. Validate requested columns exist
-	if !(len(plan.Columns) == 1 && plan.Columns[0] == "*") {
+		newData := make(map[string]any)
 		for _, col := range plan.Columns {
-			if !e.TableHasColumn(plan.TableName, col) {
-				return nil, fmt.Errorf("execution error: requested column '%s' does not exist in table '%s'", col, plan.TableName)
+			if val, ok := row.Data[col]; ok {
+				newData[col] = val
+			} else {
+				return nil, fmt.Errorf("column '%s' does not exist in table '%s'", col, plan.TableName)
 			}
 		}
-	}
-
-	// 5. Project columns
-	if !(len(plan.Columns) == 1 && plan.Columns[0] == "*") {
-		for _, row := range rows {
-			newVals := map[string]any{}
-			for _, col := range plan.Columns {
-				newVals[col] = row.Data[col]
-			}
-			row.Data = newVals
-		}
+		rows = append(rows, &storage.Row{Data: newData})
 	}
 
 	return rows, nil
+}
+
+// --------------------------
+// INSERT helper
+// --------------------------
+func (e *Engine) insertRow(plan *planner.Plan, table *storage.Table) ([]*storage.Row, error) {
+	newRow := &storage.Row{Data: make(map[string]any)}
+	for col, val := range plan.Values {
+		if !e.TableHasColumn(plan.TableName, col) {
+			return nil, fmt.Errorf("column '%s' does not exist in table '%s'", col, plan.TableName)
+		}
+		newRow.Data[col] = val
+	}
+
+	table.Rows = append(table.Rows, newRow)
+	return []*storage.Row{newRow}, nil
+}
+
+// --------------------------
+// UPDATE helper
+// --------------------------
+func (e *Engine) updateRows(plan *planner.Plan, table *storage.Table) ([]*storage.Row, error) {
+	updated := []*storage.Row{}
+
+	for _, row := range table.Rows {
+		if matchesFilters(row, plan.Filters) {
+			for col, val := range plan.Values {
+				if !e.TableHasColumn(plan.TableName, col) {
+					return nil, fmt.Errorf("column '%s' does not exist in table '%s'", col, plan.TableName)
+				}
+				row.Data[col] = val
+			}
+			updated = append(updated, row)
+		}
+	}
+
+	return updated, nil
+}
+
+// --------------------------
+// DELETE helper
+// --------------------------
+func (e *Engine) deleteRows(plan *planner.Plan, table *storage.Table) ([]*storage.Row, error) {
+	remaining := []*storage.Row{}
+	deleted := []*storage.Row{}
+
+	for _, row := range table.Rows {
+		if matchesFilters(row, plan.Filters) {
+			deleted = append(deleted, row)
+		} else {
+			remaining = append(remaining, row)
+		}
+	}
+
+	table.Rows = remaining
+	return deleted, nil
+}
+
+// --------------------------
+// Filters & column helpers
+// --------------------------
+
+func matchesFilters(row *storage.Row, filters []planner.Filter) bool {
+	for _, f := range filters {
+		val, ok := row.Data[f.Column]
+		if !ok {
+			return false
+		}
+
+		switch f.Operator {
+		case "=":
+			if val != f.Value {
+				return false
+			}
+		case "!=":
+			if val == f.Value {
+				return false
+			}
+		case "<":
+			if toFloat(val) >= toFloat(f.Value) {
+				return false
+			}
+		case "<=":
+			if toFloat(val) > toFloat(f.Value) {
+				return false
+			}
+		case ">":
+			if toFloat(val) <= toFloat(f.Value) {
+				return false
+			}
+		case ">=":
+			if toFloat(val) < toFloat(f.Value) {
+				return false
+			}
+		default:
+			panic("unsupported operator: " + f.Operator)
+		}
+	}
+	return true
+}
+
+// Helper to convert int/float to float64 for comparison
+func toFloat(v any) float64 {
+	switch n := v.(type) {
+	case int:
+		return float64(n)
+	case int64:
+		return float64(n)
+	case float64:
+		return n
+	default:
+		panic(fmt.Sprintf("cannot convert %T to float64 for comparison", v))
+	}
 }
 
 func (e *Engine) TableHasColumn(tableName, col string) bool {
@@ -99,7 +196,6 @@ func (e *Engine) TableHasColumn(tableName, col string) bool {
 	if !ok {
 		return false
 	}
-
 	for _, c := range t.Columns {
 		if c.Name == col {
 			return true

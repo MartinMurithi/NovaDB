@@ -2,11 +2,9 @@ package parser
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 )
 
-// QueryType represents SQL query types
 type QueryType string
 
 const (
@@ -16,90 +14,166 @@ const (
 	DeleteQuery QueryType = "DELETE"
 )
 
-// Filter represents a WHERE clause condition
 type Filter struct {
 	Column   string
-	Operator string // Only "=" supported for now
+	Operator string
 	Value    any
 }
 
-// Query represents a parsed SQL query
+type Assignment struct {
+	Column string
+	Value  any
+}
+
 type Query struct {
-	Type    QueryType
-	Table   string
+	Type  QueryType
+	Table string
 
 	// SELECT
 	Columns []string
+
+	// WHERE (shared)
 	Filters []Filter
 
 	// INSERT / UPDATE
-	Values  map[string]any
+	Assignments []Assignment
 }
 
-// ParseSelect parses a simple SELECT SQL string
-// Supported syntax:
-// "SELECT col1, col2 FROM table"
-// "SELECT * FROM table"
-// "SELECT col1 FROM table WHERE col2 = 123"
-// "SELECT col1 FROM table WHERE col2 = 'abc'"
-func ParseSelect(sql string) (*Query, error) {
+func Parse(sql string) (*Query, error) {
 	sql = strings.TrimSpace(sql)
-	sqlUpper := strings.ToUpper(sql)
+	sql = strings.TrimSuffix(sql, ";")
+	sql = strings.ToUpper(sql[:6]) + sql[6:]
 
-	if !strings.HasPrefix(sqlUpper, "SELECT") {
-		return nil, fmt.Errorf("only SELECT queries supported")
+	switch {
+	case strings.HasPrefix(sql, "SELECT"):
+		return parseSelect(sql)
+	case strings.HasPrefix(sql, "INSERT"):
+		return parseInsert(sql)
+	case strings.HasPrefix(sql, "UPDATE"):
+		return parseUpdate(sql)
+	case strings.HasPrefix(sql, "DELETE"):
+		return parseDelete(sql)
+	default:
+		return nil, fmt.Errorf("unsupported SQL statement")
 	}
+}
 
-	parts := strings.SplitN(sql, "FROM", 2)
+func parseSelect(sql string) (*Query, error) {
+	// SELECT a,b FROM table WHERE c=1
+	parts := strings.Split(sql, "FROM")
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("invalid SELECT syntax")
 	}
 
-	// Parse columns
-	colsPart := strings.TrimSpace(parts[0][len("SELECT "):])
-	columns := []string{}
-	for _, c := range strings.Split(colsPart, ",") {
-		columns = append(columns, strings.TrimSpace(c))
+	colsPart := strings.TrimSpace(strings.TrimPrefix(parts[0], "SELECT"))
+	columns := strings.Split(colsPart, ",")
+
+	for i := range columns {
+		columns[i] = strings.TrimSpace(columns[i])
 	}
 
-	// Parse table and optional WHERE
-	tablePart := strings.TrimSpace(parts[1])
-	tableName := tablePart
-	var filters []Filter
+	rest := strings.TrimSpace(parts[1])
+	tableAndWhere := strings.Split(rest, "WHERE")
 
-	if strings.Contains(strings.ToUpper(tablePart), "WHERE") {
-		subParts := strings.SplitN(tablePart, "WHERE", 2)
-		tableName = strings.TrimSpace(subParts[0])
-		whereClause := strings.TrimSpace(subParts[1])
+	q := &Query{
+		Type:    SelectQuery,
+		Table:   strings.TrimSpace(tableAndWhere[0]),
+		Columns: columns,
+	}
 
-		// Only support simple equality: column = value
-		parts := strings.SplitN(whereClause, "=", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("only simple equality WHERE supported")
-		}
+	if len(tableAndWhere) == 2 {
+		q.Filters = parseWhere(tableAndWhere[1])
+	}
 
-		col := strings.TrimSpace(parts[0])
-		valStr := strings.TrimSpace(parts[1])
+	return q, nil
+}
 
-		// Parse value as int if possible, else string
-		var val any
-		if i, err := strconv.Atoi(valStr); err == nil {
-			val = i
-		} else {
-			val = strings.Trim(valStr, "'") // remove quotes for strings
-		}
+func parseInsert(sql string) (*Query, error) {
+	// INSERT INTO t (a,b) VALUES (1,2)
+	parts := strings.Split(sql, "VALUES")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid INSERT syntax")
+	}
 
-		filters = append(filters, Filter{
-			Column:   col,
-			Operator: "=",
-			Value:    val,
+	head := parts[0]
+	valuesPart := parts[1]
+
+	table := strings.Fields(head)[2]
+
+	cols := strings.Split(
+		strings.TrimSpace(head[strings.Index(head, "(")+1:strings.Index(head, ")")]),
+		",",
+	)
+
+	vals := strings.Split(
+		strings.Trim(valuesPart, " ()"),
+		",",
+	)
+
+	if len(cols) != len(vals) {
+		return nil, fmt.Errorf("columns/values mismatch")
+	}
+
+	assignments := []Assignment{}
+	for i := range cols {
+		assignments = append(assignments, Assignment{
+			Column: strings.TrimSpace(cols[i]),
+			Value:  parseValue(vals[i]),
 		})
 	}
 
 	return &Query{
-		Type:    SelectQuery,
-		Table:   tableName,
-		Columns: columns,
-		Filters: filters,
+		Type:        InsertQuery,
+		Table:       table,
+		Assignments: assignments,
 	}, nil
+}
+
+func parseUpdate(sql string) (*Query, error) {
+	// UPDATE t SET a=1 WHERE id=2
+	parts := strings.Split(sql, "SET")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid UPDATE syntax")
+	}
+
+	table := strings.Fields(parts[0])[1]
+	setAndWhere := strings.Split(parts[1], "WHERE")
+
+	assignments := []Assignment{}
+	for _, a := range strings.Split(setAndWhere[0], ",") {
+		kv := strings.Split(a, "=")
+		assignments = append(assignments, Assignment{
+			Column: strings.TrimSpace(kv[0]),
+			Value:  parseValue(kv[1]),
+		})
+	}
+
+	q := &Query{
+		Type:        UpdateQuery,
+		Table:       table,
+		Assignments: assignments,
+	}
+
+	if len(setAndWhere) == 2 {
+		q.Filters = parseWhere(setAndWhere[1])
+	}
+
+	return q, nil
+}
+
+func parseDelete(sql string) (*Query, error) {
+	// DELETE FROM t WHERE id=1
+	parts := strings.Split(sql, "WHERE")
+	table := strings.Fields(parts[0])[2]
+
+	q := &Query{
+		Type:  DeleteQuery,
+		Table: table,
+	}
+
+	if len(parts) == 2 {
+		q.Filters = parseWhere(parts[1])
+	}
+
+	return q, nil
 }
