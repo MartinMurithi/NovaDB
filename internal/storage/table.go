@@ -80,6 +80,20 @@ func (t *Table) Insert(row *Row) error {
 	if _, exists := t.PrimaryIndex[pkValue]; exists {
 		return fmt.Errorf("duplicate primary key value %v", pkValue)
 	}
+	
+	//  Ensure column exists before inserting data to it
+	for key := range row.Data {
+		found := false
+		for _, col := range t.Columns {
+			if col.Name == key {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("column %s does not exist in table %s", key, t.Name)
+		}
+	}
 
 	// Enforce UNIQUE constraints (non-primary)
 	for _, col := range t.Columns {
@@ -104,7 +118,6 @@ func (t *Table) Insert(row *Row) error {
 
 	return nil
 }
-
 
 // GetRows returns all rows in the table
 func (t *Table) GetRows() []*Row {

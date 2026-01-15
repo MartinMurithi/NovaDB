@@ -278,7 +278,7 @@ func TestUpdateRow(t *testing.T) {
 	table.Insert(&Row{Data: map[string]any{"id": 1, "name": "Alice"}})
 
 	// Update the row
-	if err := table.Update(1, map[string]any{"name": "Alice Updated"}); err != nil {
+	if err := table.Update(1, map[string]any{"name": "Alice Update"}); err != nil {
 		t.Fatalf("update failed: %v", err)
 	}
 
