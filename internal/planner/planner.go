@@ -6,24 +6,32 @@ import (
 	"github.com/MartinMurithi/NovaDB.git/internal/parser"
 )
 
-
 // --------------------------
 // Plan Types
 // --------------------------
 
+
 type PlanType string
 
 const (
+	// DML
 	SelectPlan PlanType = "SELECT"
 	InsertPlan PlanType = "INSERT"
 	UpdatePlan PlanType = "UPDATE"
 	DeletePlan PlanType = "DELETE"
+
+	// DDL
+	CreateTablePlan   PlanType = "CREATE_TABLE"
+	AddColumnPlan     PlanType = "ADD_COLUMN"
+	ShowTablesPlan    PlanType = "SHOW_TABLES"
+	DescribeTablePlan PlanType = "DESCRIBE_TABLE"
 )
+
 
 // Filter represents a WHERE clause condition
 type Filter struct {
 	Column   string
-	Operator string // Only "=" supported for now
+	Operator string // <, >, <=, >=, =, !=
 	Value    any
 }
 
@@ -38,6 +46,10 @@ type Plan struct {
 
 	// INSERT / UPDATE
 	Values map[string]any
+
+	// DDL
+	ColumnsToAdd []string // For ADD COLUMN
+	ColumnTypes  []string // Types for ADD COLUMN
 }
 
 // --------------------------
@@ -48,13 +60,41 @@ func CreatePlan(q *parser.Query) (*Plan, error) {
 	switch q.Type {
 
 	// --------------------------
+	case parser.CreateTableQuery:
+		return &Plan{
+			Type:      CreateTablePlan,
+			TableName: q.Table,
+		}, nil
+
+	// --------------------------
+	case parser.AddColumnQuery:
+		return &Plan{
+			Type:         AddColumnPlan,
+			TableName:    q.Table,
+			ColumnsToAdd: q.Columns,
+			ColumnTypes:  q.ColumnTypes,
+		}, nil
+
+	// --------------------------
+	case parser.ShowTablesQuery:
+		return &Plan{
+			Type: ShowTablesPlan,
+		}, nil
+
+	// --------------------------
+	case parser.DescribeTableQuery:
+		return &Plan{
+			Type:      DescribeTablePlan,
+			TableName: q.Table,
+		}, nil
+
+	// --------------------------
 	case parser.SelectQuery:
 		cols := q.Columns
 		if len(cols) == 0 {
 			cols = []string{"*"}
 		}
 
-		// Convert parser.Filters -> planner.Filters
 		filters := make([]Filter, len(q.Filters))
 		for i, f := range q.Filters {
 			filters[i] = Filter{
@@ -91,7 +131,6 @@ func CreatePlan(q *parser.Query) (*Plan, error) {
 			values[a.Column] = a.Value
 		}
 
-		// Convert parser.Filters -> planner.Filters
 		filters := make([]Filter, len(q.Filters))
 		for i, f := range q.Filters {
 			filters[i] = Filter{
@@ -110,7 +149,6 @@ func CreatePlan(q *parser.Query) (*Plan, error) {
 
 	// --------------------------
 	case parser.DeleteQuery:
-		// Convert parser.Filters -> planner.Filters
 		filters := make([]Filter, len(q.Filters))
 		for i, f := range q.Filters {
 			filters[i] = Filter{
@@ -131,3 +169,4 @@ func CreatePlan(q *parser.Query) (*Plan, error) {
 		return nil, fmt.Errorf("unsupported query type %s", q.Type)
 	}
 }
+

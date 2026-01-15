@@ -3,15 +3,21 @@ package parser
 import (
 	"fmt"
 	"strings"
+
+	"github.com/MartinMurithi/NovaDB.git/internal/storage"
 )
 
 type QueryType string
 
 const (
-	SelectQuery QueryType = "SELECT"
-	InsertQuery QueryType = "INSERT"
-	UpdateQuery QueryType = "UPDATE"
-	DeleteQuery QueryType = "DELETE"
+	SelectQuery        QueryType = "SELECT"
+	InsertQuery        QueryType = "INSERT"
+	UpdateQuery        QueryType = "UPDATE"
+	DeleteQuery        QueryType = "DELETE"
+	CreateTableQuery   QueryType = "CREATE_TABLE"
+	AddColumnQuery     QueryType = "ADD_COLUMN"
+	ShowTablesQuery    QueryType = "SHOW_TABLES"
+	DescribeTableQuery QueryType = "DESCRIBE_TABLE"
 )
 
 type Filter struct {
@@ -37,6 +43,9 @@ type Query struct {
 
 	// INSERT / UPDATE
 	Assignments []Assignment
+
+	// DDL
+	ColumnTypes []string
 }
 
 func Parse(sql string) (*Query, error) {
@@ -53,9 +62,69 @@ func Parse(sql string) (*Query, error) {
 		return parseUpdate(sql)
 	case strings.HasPrefix(sql, "DELETE"):
 		return parseDelete(sql)
+	case strings.HasPrefix(sql, "CREATE TABLE"):
+		return parseCreateTable(sql)
+	case strings.HasPrefix(sql, "ALTER TABLE") && strings.Contains(sql, "ADD COLUMN"):
+		return parseAddColumn(sql)
+	case strings.HasPrefix(sql, "SHOW TABLES"):
+		return &Query{Type: ShowTablesQuery}, nil
+	case strings.HasPrefix(sql, "DESCRIBE"):
+		table := strings.Fields(sql)[1]
+		return &Query{Type: DescribeTableQuery, Table: table}, nil
 	default:
 		return nil, fmt.Errorf("unsupported SQL statement")
 	}
+}
+
+func parseCreateTable(sql string) (*Query, error) {
+	// CREATE TABLE users
+	parts := strings.Fields(sql)
+	if len(parts) < 3 {
+		return nil, fmt.Errorf("invalid CREATE TABLE syntax")
+	}
+	table := parts[2]
+
+	return &Query{
+		Type:  CreateTableQuery,
+		Table: table,
+	}, nil
+}
+
+func parseAddColumn(sql string) (*Query, error) {
+	// Example: ALTER TABLE users ADD COLUMN age INT
+	parts := strings.Fields(sql)
+	if len(parts) < 6 {
+		return nil, fmt.Errorf("invalid ALTER TABLE ADD COLUMN syntax")
+	}
+
+	table := parts[2]
+	colName := parts[5]
+
+	// Default to TEXT if type is not specified
+	colType := storage.TextType
+	if len(parts) >= 7 {
+		switch strings.ToUpper(parts[6]) {
+		case "INT":
+			colType = storage.IntType
+		case "TEXT":
+			colType = storage.TextType
+		case "FLOAT":
+			colType = storage.FloatType
+		case "BOOL":
+			colType = storage.BoolType
+		case "DATE":
+			colType = storage.DateType
+		default:
+			return nil, fmt.Errorf("unknown column type: %s", parts[6])
+		}
+	}
+
+	return &Query{
+		Type:        AddColumnQuery,
+		Table:       table,
+		Columns:     []string{colName},
+		ColumnTypes: []string{string(colType)}, // store type
+	}, nil
 }
 
 func parseSelect(sql string) (*Query, error) {

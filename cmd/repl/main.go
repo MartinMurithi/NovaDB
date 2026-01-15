@@ -14,12 +14,14 @@ import (
 )
 
 // SQL keywords for highlighting
+// --------------------------
 var sqlKeywords = []string{
 	"SELECT", "FROM", "WHERE", "INSERT", "INTO", "VALUES",
 	"UPDATE", "SET", "DELETE", "AND", "OR",
+	"CREATE", "TABLE", "ALTER", "ADD", "COLUMN",
+	"SHOW", "DESCRIBE",
 }
 
-// highlightSQL colors keywords
 func highlightSQL(sql string) string {
 	for _, kw := range sqlKeywords {
 		sql = strings.ReplaceAll(sql, kw, "\033[1;34m"+kw+"\033[0m")
@@ -27,7 +29,9 @@ func highlightSQL(sql string) string {
 	return sql
 }
 
-// PrintRows prints rows in table format, aligned and respecting column order
+// --------------------------
+// PrintRows: nicely format output
+// --------------------------
 func PrintRows(rows []*storage.Row, columns []string, table *storage.Table) {
 	if len(rows) == 0 {
 		fmt.Println("(no rows)")
@@ -76,6 +80,9 @@ func PrintRows(rows []*storage.Row, columns []string, table *storage.Table) {
 	}
 }
 
+// --------------------------
+// Main REPL
+// --------------------------
 func main() {
 	// --------------------------
 	// 1. Initialize DB and Engine
@@ -83,7 +90,7 @@ func main() {
 	db := storage.NewDatabase()
 	eng := engine.NewEngine(db)
 
-	// Create example table
+	// Example table
 	users, _ := db.CreateTable("users")
 	users.AddColumn(&storage.Column{Name: "id", ColumnType: storage.IntType, IsPrimaryKey: true})
 	users.AddColumn(&storage.Column{Name: "names", ColumnType: storage.TextType})
@@ -95,7 +102,7 @@ func main() {
 	eng.Insert("users", map[string]any{"id": 3, "names": "Charlie", "age": 22})
 
 	// --------------------------
-	// 2. Setup REPL with readline
+	// 2. Setup REPL
 	// --------------------------
 	rl, err := readline.New("> ")
 	if err != nil {
@@ -162,9 +169,36 @@ func main() {
 		}
 
 		// --------------------------
-		// Print results
+		// Print results based on plan type
 		// --------------------------
-		table := eng.DB().Tables[plan.TableName]
-		PrintRows(rows, plan.Columns, table)
+		switch plan.Type {
+		case planner.SelectPlan:
+			table, ok := db.Tables[plan.TableName]
+			if !ok {
+				fmt.Printf("Table %s not found\n", plan.TableName)
+				continue
+			}
+			PrintRows(rows, plan.Columns, table)
+
+		case planner.ShowTablesPlan:
+			fmt.Println("Tables:")
+			for _, r := range rows {
+				fmt.Println(" -", r.Data["table_name"])
+			}
+
+		case planner.DescribeTablePlan:
+			table, ok := db.Tables[plan.TableName]
+			if !ok {
+				fmt.Printf("Table %s not found\n", plan.TableName)
+				continue
+			}
+			fmt.Printf("Columns in %s:\n", table.Name)
+			for _, col := range table.Columns {
+				fmt.Printf(" - %s (%s)\n", col.Name, col.ColumnType)
+			}
+
+		default:
+			fmt.Printf("%s executed successfully\n", sql)
+		}
 	}
 }

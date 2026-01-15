@@ -20,32 +20,109 @@ func (e *Engine) DB() *storage.Database {
 	return e.db
 }
 
-// ExecutePlan executes any plan type (SELECT, INSERT, UPDATE, DELETE)
 func (e *Engine) ExecutePlan(plan *planner.Plan) ([]*storage.Row, error) {
-	// Lookup table
-	t, ok := e.db.Tables[plan.TableName]
-	if !ok {
-		return nil, fmt.Errorf("table '%s' does not exist", plan.TableName)
-	}
-
 	switch plan.Type {
+
+	// --------------------------
+	case planner.CreateTablePlan:
+		_, exists := e.db.Tables[plan.TableName]
+		if exists {
+			return nil, fmt.Errorf("table '%s' already exists", plan.TableName)
+		}
+
+		_, err := e.db.CreateTable(plan.TableName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create table: %w", err)
+		}
+
+		return nil, nil // DDL commands return no rows
+
+	// --------------------------
+	case planner.AddColumnPlan:
+		t, ok := e.db.Tables[plan.TableName]
+		if !ok {
+			return nil, fmt.Errorf("table '%s' does not exist", plan.TableName)
+		}
+
+		for i, col := range plan.ColumnsToAdd {
+			colType := storage.TextType
+			if i < len(plan.ColumnTypes) {
+				colType = storage.ColumnType(plan.ColumnTypes[i])
+			}
+			t.AddColumn(&storage.Column{
+				Name:       col,
+				ColumnType: colType,
+			})
+		}
+
+		return nil, nil
+
+	// --------------------------
+	case planner.ShowTablesPlan:
+		rows := []*storage.Row{}
+		for name := range e.db.Tables {
+			rows = append(rows, &storage.Row{
+				Data: map[string]any{"table_name": name},
+			})
+		}
+		return rows, nil
+
+	// --------------------------
+	case planner.DescribeTablePlan:
+		t, ok := e.db.Tables[plan.TableName]
+		if !ok {
+			return nil, fmt.Errorf("table '%s' does not exist", plan.TableName)
+		}
+
+		rows := []*storage.Row{}
+		for _, col := range t.Columns {
+			rows = append(rows, &storage.Row{
+				Data: map[string]any{
+					"name": col.Name,
+					"type": col.ColumnType,
+				},
+			})
+		}
+		return rows, nil
+
 	// --------------------------
 	case planner.SelectPlan:
+		t, ok := e.db.Tables[plan.TableName]
+		if !ok {
+			return nil, fmt.Errorf("table '%s' does not exist", plan.TableName)
+		}
 		return e.selectRows(plan, t)
 
+	// --------------------------
 	case planner.InsertPlan:
+		t, ok := e.db.Tables[plan.TableName]
+		if !ok {
+			return nil, fmt.Errorf("table '%s' does not exist", plan.TableName)
+		}
 		return e.insertRow(plan, t)
 
+	// --------------------------
 	case planner.UpdatePlan:
+		t, ok := e.db.Tables[plan.TableName]
+		if !ok {
+			return nil, fmt.Errorf("table '%s' does not exist", plan.TableName)
+		}
 		return e.updateRows(plan, t)
 
+	// --------------------------
 	case planner.DeletePlan:
+		t, ok := e.db.Tables[plan.TableName]
+		if !ok {
+			return nil, fmt.Errorf("table '%s' does not exist", plan.TableName)
+		}
 		return e.deleteRows(plan, t)
 
+	// --------------------------
 	default:
 		return nil, fmt.Errorf("unsupported plan type %s", plan.Type)
 	}
 }
+
 
 // --------------------------
 // SELECT helper
