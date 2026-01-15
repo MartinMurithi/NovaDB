@@ -19,6 +19,22 @@ func NewEngine(db *storage.Database) *Engine {
 	}
 }
 
+// ExecutePlan dispatches based on plan type
+func (e *Engine) ExecutePlan(plan *planner.Plan) ([]*storage.Row, error) {
+	switch plan.Type {
+	case planner.SelectPlan:
+		return e.executeSelect(plan)
+	case planner.InsertPlan:
+		return nil, e.executeInsert(plan)
+	case planner.UpdatePlan:
+		return nil, e.executeUpdate(plan)
+	case planner.DeletePlan:
+		return nil, e.executeDelete(plan)
+	default:
+		return nil, fmt.Errorf("unsupported plan type %s", plan.Type)
+	}
+}
+
 func (e *Engine) ExecutePlan(plan *planner.Plan) ([]*storage.Row, error) {
 	// 1. Lookup table
 	rows, err := e.SelectAll(plan.TableName)

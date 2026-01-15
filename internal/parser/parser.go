@@ -11,6 +11,9 @@ type QueryType string
 
 const (
 	SelectQuery QueryType = "SELECT"
+	InsertQuery QueryType = "INSERT"
+	UpdateQuery QueryType = "UPDATE"
+	DeleteQuery QueryType = "DELETE"
 )
 
 // Filter represents a WHERE clause condition
@@ -24,8 +27,13 @@ type Filter struct {
 type Query struct {
 	Type    QueryType
 	Table   string
+
+	// SELECT
 	Columns []string
 	Filters []Filter
+
+	// INSERT / UPDATE
+	Values  map[string]any
 }
 
 // ParseSelect parses a simple SELECT SQL string
