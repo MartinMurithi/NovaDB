@@ -1,4 +1,4 @@
-package repl
+package main
 
 import (
 	"fmt"
@@ -27,10 +27,11 @@ func main(){
 	eng.Insert("users", map[string]any{"id": 3, "name": "Charlie"})
 
 	// 4. Example SQL string
-	sql := "SELECT id, name FROM users WHERE id = 2"
+	// sql := "SELECT id, name FROM users WHERE id = 2"
+	sql1 := "SELECT * FROM users"
 
 	// 5. Parse SQL
-	query, err := parser.ParseSelect(sql)
+	query, err := parser.ParseSelect(sql1)
 	if err != nil {
 		log.Fatalf("parse failed: %v", err)
 	}
@@ -49,7 +50,7 @@ func main(){
 
 	// 8. Print results
 	for _, row := range rows {
-		fmt.Println(row.Values)
+		fmt.Println(row.Data)
 	}
 
 }
