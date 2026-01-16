@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NovaDB UI</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="sidebar">
+  <h3>Tables</h3>
+  <ul id="tablesList"></ul>
+  <input id="newTableName" placeholder="New table name">
+  <button onclick="createTable()">Create Table</button>
+</div>
+
+<div id="mainPanel">
+  <h2 id="tableTitle">Select a table</h2>
+  <div id="columnsInfo"></div>
+  <div id="tableData"></div>
+
+  <h3>Add Column</h3>
+  <input id="colName" placeholder="Column name">
+  <select id="colType">
+    <option>INT</option>
+    <option>TEXT</option>
+    <option>FLOAT</option>
+    <option>BOOL</option>
+  </select>
+  <button onclick="addColumn()">Add Column</button>
+
+  <h3>Add Row</h3>
+  <div id="addRowForm"></div>
+</div>
+
+<script src="/static/main.js"></script>
+</body>
+</html>

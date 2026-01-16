@@ -1,0 +1,6 @@
+body { font-family: sans-serif; display: flex; }
+#sidebar { width: 200px; padding: 10px; border-right: 1px solid #ccc; }
+#mainPanel { padding: 10px; flex: 1; }
+table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+th, td { border: 1px solid #ccc; padding: 5px; text-align: left; }
+button { margin-left: 5px; }
