@@ -72,15 +72,17 @@ Below is a demo showing NovaDB in action via the REPL:
 
 Clone the repository:
 
-git clone https://github.com/yourusername/NovaDB.git
-cd NovaDB
+git clone [https://github.com/yourusername/NovaDB.git](https://github.com/MartinMurithi/NovaDB)
 
-Running the REPL
+> cd NovaDB
 
-go run ./cmd/novadb --mode=repl
+### Running the REPL
+> go run ./cmd/novadb --mode=repl
+
 You will see:
-
+```sql
 NovaDB REPL. Type 'exit;' to quit. End SQL with ';'
+```
 > 
 Example session in the REPL:
 
