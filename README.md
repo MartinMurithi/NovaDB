@@ -72,7 +72,7 @@ Below is a demo showing NovaDB in action via the REPL:
 
 Clone the repository:
 
-git clone [https://github.com/yourusername/NovaDB.git](https://github.com/MartinMurithi/NovaDB)
+git clone [https://github.com/MartinMurithi/NovaDB.git](https://github.com/MartinMurithi/NovaDB)
 
 > cd NovaDB
 
