@@ -48,17 +48,16 @@ This project was inspired by the **Pesapal RDBMS Challenge**, designed to demons
 
 ## Demo
 
-Below is a 1-minute demo showing NovaDB in action via the REPL:
+Below is a demo showing NovaDB in action via the REPL:
 
-<video src="novadb_demo_1.mp4" width="800" autoplay loop muted></video>
+![NovaDB REPL Demo](novadb_demo.gif)
 
-- Create a table `users`
-- Add columns `id`, `names`, `age`
+- Create a table `products`
+- Add columns `id`, `name`, `price`, `is_discountable`
 - Insert rows
 - Query rows with `SELECT`
 - Update and delete rows dynamically
 - Describe table structure
-- List all tables
 
 ---
 
@@ -73,80 +72,77 @@ Below is a 1-minute demo showing NovaDB in action via the REPL:
 
 Clone the repository:
 
-```bash
 git clone https://github.com/yourusername/NovaDB.git
 cd NovaDB
+
 Running the REPL
-bash
-Copy code
+
 go run ./cmd/novadb --mode=repl
 You will see:
 
-pgsql
-Copy code
 NovaDB REPL. Type 'exit;' to quit. End SQL with ';'
 > 
-Example session:
+Example session in the REPL:
 
-sql
-Copy code
+```sql
 > CREATE TABLE users;
-Table 'users' created successfully
+Table "users" created successfully
 
 > ALTER TABLE users ADD COLUMN id INT;
-Column 'id' added to 'users'
+Column "id" added successfully
 
 > ALTER TABLE users ADD COLUMN names TEXT;
-Column 'names' added to 'users'
+Column "names" added successfully
 
-> INSERT INTO users (id, names) VALUES (1, 'Alice');
-Query executed successfully
+> ALTER TABLE users ADD COLUMN age INT;
+Column "age" added successfully
+
+> INSERT INTO users (id, names, age) VALUES (1, 'Alice', 30);
+Row inserted successfully
+
+> INSERT INTO users (id, names, age) VALUES (2, 'Bob', 25);
+Row inserted successfully
 
 > SELECT * FROM users;
-id  names
---  -----
-1   Alice
+id   names    age
+--   -----   ---
+1    Alice   30
+2    Bob     25
+
 Exiting
-sql
-Copy code
 > EXIT;
 Bye!
-Project Structure
-graphql
-Copy code
+```
+## Project Structure
+```
 NovaDB/
-├─ cmd/          # Entry point for REPL
+├─ cmd/            # Entry point for REPL
 ├─ internal/
-│  ├─ engine/    # Execution engine
-│  ├─ parser/    # SQL parser
-│  ├─ planner/   # Query planner
-│  └─ storage/   # In-memory storage structures
-├─ assets/       # Demo video and GIF for README
+│  ├─ engine/      # Execution engine
+│  ├─ parser/      # SQL parser
+│  ├─ planner/     # Query planner
+│  └─ storage/     # In-memory storage structures
+├─ assets/         # Demo video and GIF for README
 ├─ README.md
 └─ go.mod
-Contributing
+```
+
+### Contributing
 NovaDB is an educational project and open to contributions.
 To contribute:
+- Fork the repository.
+- Create a branch: git checkout -b feature/my-feature
+- Commit your changes: git commit -m "Add feature"
+- Push: git push origin feature/my-feature
+- Open a Pull Request
 
-Fork the repository.
-
-Create a branch: git checkout -b feature/my-feature
-
-Commit your changes: git commit -m "Add feature"
-
-Push: git push origin feature/my-feature
-
-Open a Pull Request
-
-License
+### License
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-Notes
-This project is focused on learning and experimentation with database internals.
+### Notes
+- This project is focused on learning and experimentation with database internals.
+- All data is stored in-memory; restarting the REPL clears all tables and rows.
+- The UI mode is excluded for simplicity; the focus is on understanding the REPL and database engine.
 
-All data is stored in-memory; restarting the REPL clears all tables and rows.
-
-The UI mode is excluded for simplicity; the focus is on understanding the REPL and database engine.
-
-Author: Martin Murithi
+### Author: Martin Murithi
 Inspired by the Pesapal RDBMS Challenge.
