@@ -10,8 +10,6 @@
 - Listing all tables and describing table structure
 - SQL query parsing, planning, and execution
 
-This project was inspired by the **Pesapal RDBMS Challenge**, designed to demonstrate building a simple RDBMS from scratch with a practical REPL interface.
-
 ---
 
 ## Features
@@ -147,4 +145,3 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - The UI mode is excluded for simplicity; the focus is on understanding the REPL and database engine.
 
 ### Author: Martin Murithi
-Inspired by the Pesapal RDBMS Challenge.
